@@ -1,0 +1,186 @@
+<style>
+	body {
+		margin: 0;
+		padding: 0;
+		font-family: Helvetica, Arial, Verdana, Sans;
+	}
+	.cities {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 600px;
+	}
+	.dot {
+		position: absolute;
+		text-transform: uppercase;
+		color: #fff;
+		font-size: 14px;
+		line-height: 20px;
+		margin-top: -10px;
+		padding-left: 10px;
+	}
+	.dot span {
+		border-radius: 50px;
+		background: #fff;
+		width: 4px;
+		height: 4px;
+		top: -2px;
+		left: -2px;
+		position: absolute;
+	}
+
+	.dot.village { font-size: 12px; }
+	.dot.city { font-size: 14px; }
+	.dot.agglomeration { font-size: 14px; }
+
+	.dot.village span { width: 4px; height: 4px; top: 8px; left: -2px;}
+	.dot.city span { width: 10px; height: 10px; top: 5px; left: -5px;}
+	.dot.agglomeration span { width: 16px; height: 16px; top: 2px; left: -8px;}
+</style>
+
+<canvas id ="canvas" width="600" height="600"></canvas>
+<div class="cities"></div>
+
+<script src="PixelRenderer.js"></script>
+<script src="perlin.js"></script>
+<script src="jquery.js"></script>
+
+<script>
+	noise.seed(Math.random());
+
+	var OCTAVES = 8;
+	var SNOW_TRESHOLD = 0.65;
+	var SNOW_GAIN = 1.3;
+
+	var CITIES_DENSITY = 0.0006;
+
+	var TEMPERATE_TRESHOLD = 0.2
+
+	var RIVERS_DEPTH = 90;
+	var mulSnowLimit = 1.0 / (SNOW_TRESHOLD*SNOW_TRESHOLD);
+
+	var renderer = new PixelRenderer("canvas");
+	var heightMap = [];
+
+	var cities = [];
+
+	function noise_fractal_brownian_motion(x, y, rivers) {
+		var lacunarity = 1.3;
+		var p = 1.2;
+		var gain = 0.9;
+
+		if( rivers ) {
+	 		lacunarity = 1.1;
+	 		p = 2;
+	 	}
+	 
+		var sum = 0.0;
+	 
+		for(var i = 0; i < OCTAVES; i++) {
+			sum += (p / (Math.pow(2, i + 1))) * noise.simplex2(x*Math.pow(2, i), y*Math.pow(2, i));
+	 		
+	 		p *= gain;
+
+			x *= lacunarity;
+			y *= lacunarity;
+		}
+	 	
+	 	if( rivers ) {
+	 		return Math.abs(sum) - 0.03;
+	 	}
+
+	 	return sum;
+	}
+
+	renderer.setPixelShader( function(x, y) {
+		
+		if( ! heightMap[x] ) {
+			heightMap[x] = [];
+		}
+
+		var centerImportance = ((300-x) * (300-x) + (300-y) * (300-y))/2000000;
+		centerImportance = Math.max(0, Math.min(centerImportance, 1));
+
+		var v  = 1.1 * noise_fractal_brownian_motion(x/800, y/800);
+		
+		var vriver = noise_fractal_brownian_motion(x/800, y/800, true);
+
+		vriver = Math.max(-1, Math.min(1, vriver));
+
+		if( vriver < 0 && v > 0 ) {
+			v += vriver * 3;
+
+			if( Math.random() < CITIES_DENSITY ) {
+				cities.push({population: Math.floor(Math.random()*34000), x: x, y: y, name: "Z"+x+'-'+Math.floor(y/10)});
+			}
+		}
+		
+		heightMap[x][y] = v;
+
+		// Heightmap (debug)
+		//return [127 * (v + 1), 127 * (v + 1), 127 * (v + 1)];
+
+		if( v < 0 ) { // 0 is water level
+			v = Math.min(Math.abs(v), 0.5);
+			return [125 * (0.3 - v * 0.9), 205 * (0.3 - v * 0.9), 255 * (0.4 - v*0.5)];
+		} else { // Ground
+
+			var groundColor = [255 * (v + 0.2), 255 * (v+ 0.2) * 0.6, 255 * (v + 0.2) * 0.1];
+			
+			if( v < TEMPERATE_TRESHOLD ) {
+
+				var t = v / TEMPERATE_TRESHOLD;
+
+				var c = [255 * (v + 0.2) * 0.9, 255 * (v+ 0.2) * 0.7, 255 * (v + 0.2) * 0.2];
+
+				var r = lerp(c[0], groundColor[0], t);
+				var g = lerp(c[1], groundColor[1], t);
+				var b = lerp(c[2], groundColor[2], t);
+				
+				groundColor = [r, g, b];
+			}
+
+			if( v >= SNOW_TRESHOLD ) { // Snow
+				var c = groundColor[0];
+				var t = (1-v) / (1 - SNOW_TRESHOLD)
+
+				var r = c;
+				var g = lerp(c, groundColor[1], t);
+				var b = lerp(c, groundColor[2], t);
+				
+				groundColor = [r, g, b];
+			}
+
+			return groundColor;
+		} 
+	});
+
+	renderer.render(true);
+
+	if( cities.length ) {
+		for(var i in cities) {
+			var c = cities[i];
+
+			var pop_class = 'village';
+			var appellation = c.name + ' Village';
+
+			if(c.population > 10000) {
+				pop_class = 'city';
+				appellation = c.name + ' City';
+			}
+
+			if(c.population > 30000) {
+				pop_class = 'agglomeration';
+				appellation = 'Great city of ' + c.name;
+			}
+
+			$('.cities').append(
+				$('<div class="dot '+pop_class+'"><span></span>'+appellation+'</div>').css({
+					left: c.x+'px',
+					top: c.y+'px'
+				})
+			);
+		}
+	}
+</script>
