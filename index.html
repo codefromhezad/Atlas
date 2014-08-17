@@ -1,3 +1,5 @@
+<link href='http://fonts.googleapis.com/css?family=Lora:400,700' rel='stylesheet' type='text/css'>
+
 <style>
 	body {
 		margin: 0;
@@ -14,7 +16,8 @@
 	.dot {
 		position: absolute;
 		text-transform: capitalize;
-		color: #000;
+		font-family: 'Lora', Georgia, 'Times New Roman', serif;
+		color: #B7BBC9;
 		font-size: 14px;
 		line-height: 20px;
 		margin-top: -10px;
@@ -22,7 +25,7 @@
 	}
 	.dot span {
 		border-radius: 50px;
-		background: #000;
+		background: #B7BBC9;
 		width: 4px;
 		height: 4px;
 		top: -2px;
@@ -32,7 +35,7 @@
 
 	.dot.village { font-size: 12px; }
 	.dot.city { font-size: 14px; }
-	.dot.agglomeration { font-size: 14px; }
+	.dot.agglomeration { font-size: 16px; font-weight: 600; padding-left: 14px; text-transform: uppercase; }
 
 	.dot.village span { width: 4px; height: 4px; top: 8px; left: -2px;}
 	.dot.city span { width: 10px; height: 10px; top: 5px; left: -5px;}
@@ -54,10 +57,13 @@
 	var SNOW_GAIN = 1.3;
 
 	var CITIES_DENSITY = 0.0006;
+	var MIN_CITIES_DIST = 100;
 
 	var TEMPERATE_TRESHOLD = 0.5
 
 	var RIVERS_DEPTH = 90;
+
+	var min_cities_dist_sq = MIN_CITIES_DIST * MIN_CITIES_DIST;
 	var mulSnowLimit = 1.0 / (SNOW_TRESHOLD*SNOW_TRESHOLD);
 
 	var renderer = new PixelRenderer("canvas");
@@ -68,7 +74,7 @@
 	var syllabes = ["ko", "ki", "ri", "ru", "ra", "ti", "te", "ta", "me", "mi", "neh", "ne", "soo", "loo", "tah", "peh", "ka"];
 
 	function cityname() {
-		var nwords = 1 + Math.floor(Math.random() * 2);
+		var nwords = 1;
 		var nsyl = 2 + Math.floor(Math.random() * 2);
 		var csyl = "", oldcsyl = "";
 		var name = "";
@@ -85,6 +91,21 @@
 		}
 		return name;
 	}
+
+	function nearest_city_dist_sq(x,y) {
+		var dist = 999999999;
+
+		for(var i = 0; i < cities.length; i++) {
+			var ndist = (cities[i].x - x) * (cities[i].x - x) + (cities[i].y - y) * (cities[i].y - y);
+
+			if( ndist < dist ) {
+				dist = ndist;
+			}
+		}
+
+		return dist;
+	}
+
 	function noise_fractal_brownian_motion(x, y, rivers) {
 		var lacunarity = 1.3;
 		var p = 1.2;
@@ -131,7 +152,7 @@
 		if( vriver < 0 && v > 0 ) {
 			v += vriver * 3;
 
-			if( Math.random() < CITIES_DENSITY ) {
+			if( Math.random() < CITIES_DENSITY && nearest_city_dist_sq(x,y) > min_cities_dist_sq) {
 				cities.push({population: Math.floor(Math.random()*34000), x: x, y: y, name: cityname()});
 			}
 		}
